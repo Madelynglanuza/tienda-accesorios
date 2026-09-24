@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -6,11 +7,11 @@ const path = require('path');
 const fs = require('fs');
 
 const pool = new Pool({
-  user: 'umcqoky9renenjdeyox1',
-  host: 'bzxckpsolzkbqyngc3mw-postgresql.services.clever-cloud.com',
-  database: 'bzxckpsolzkbqyngc3mw',
-  password: 'gwx7hiNbGgudu0GShS0Qy60Xe9ZUhW',
-  port: 50013,
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_DATABASE,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
 });
 
 const app = express();
@@ -86,5 +87,5 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Servidor en http://localhost:${PORT}`));
