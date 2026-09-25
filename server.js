@@ -50,8 +50,11 @@ app.get('/api/products', async (req, res) => {
 // POST: Crear producto con subida de imagen
 app.post('/api/products', upload.single('image'), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'La imagen es obligatoria' });
+    }
     const { name, price, category } = req.body;
-    const image = req.file ? '/uploads/' + req.file.filename : null;
+    const image = '/uploads/' + req.file.filename;
     const { rows } = await pool.query(
       'INSERT INTO products (name, price, category, image) VALUES ($1, $2, $3, $4) RETURNING *',
       [name, price, category, image]
