@@ -5,6 +5,11 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'mi_secreto_super_seguro';
+
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -37,8 +42,63 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Crear tabla de usuarios si no existe
+pool.query(`
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL
+  )
+`).catch(err => console.log('Tabla users ya existe o error:', err.message));
+
+// Middleware para verificar token
+const auth = (req, res, next) => {
+  const header = req.headers.authorization;
+  if (!header) return res.status(401).json({ error: 'No autorizado' });
+  const token = header.split(' ')[1];
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.status(401).json({ error: 'Token inválido' });
+  }
+};
+
+// POST /api/register
+app.post('/api/register', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email',
+      [email, hash]
+    );
+    const token = jwt.sign({ id: rows[0].id, email: rows[0].email }, JWT_SECRET);
+    res.status(201).json({ token, user: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Ese email ya está registrado' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/login
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (rows.length === 0) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+    const ok = await bcrypt.compare(password, rows[0].password);
+    if (!ok) return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+    const token = jwt.sign({ id: rows[0].id, email: rows[0].email }, JWT_SECRET);
+    res.json({ token, user: { id: rows[0].id, email: rows[0].email } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET: Obtener todos los productos
-app.get('/api/products', async (req, res) => {
+app.get('/api/products', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM products');
     res.json(result.rows);
@@ -48,7 +108,7 @@ app.get('/api/products', async (req, res) => {
 });
 
 // POST: Crear producto con subida de imagen
-app.post('/api/products', upload.single('image'), async (req, res) => {
+app.post('/api/products', auth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'La imagen es obligatoria' });
@@ -66,7 +126,7 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
 });
 
 // PUT: Editar producto (imagen opcional)
-app.put('/api/products/:id', upload.single('image'), async (req, res) => {
+app.put('/api/products/:id', auth, upload.single('image'), async (req, res) => {
   try {
     const { name, price, category } = req.body;
     const image = req.file ? '/uploads/' + req.file.filename : req.body.existingImage;
@@ -81,7 +141,7 @@ app.put('/api/products/:id', upload.single('image'), async (req, res) => {
 });
 
 // DELETE: Eliminar producto
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', auth, async (req, res) => {
   try {
     await pool.query('DELETE FROM products WHERE id = $1', [req.params.id]);
     res.json({ message: 'Producto eliminado' });
