@@ -1,15 +1,19 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import pg from 'pg';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { fileURLToPath } from 'url';
+
+const { Pool } = pg;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'mi_secreto_super_seguro';
-
 
 const pool = new Pool({
   user: process.env.DB_USER,
